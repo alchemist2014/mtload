@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       sets:
-        description: "semicolon list of F,S,NB,BL,X,K,KL,FL"
-        default: "0,62,10,4000000,208,0,4000,103;0,62,20,4000000,208,0,,103;0,62,40,2000000,208,0,4000,103"
+              description: "pipe-separated list of F,S,NB,BL,X,K,KL,FL"
+              default: "0,62,10,4000000,208,0,4000,103|0,62,20,4000000,208,0,4000,103|0,62,40,2000000,208,0,4000,103"
 
 jobs:
   leak:
@@ -23,8 +23,8 @@ jobs:
       - name: sweep
         run: |
           cd /tmp/p/tools
-          IFS=';' ; i=0
-          for s in ${{ inputs.sets }}; do
+          IFS='|'; SETS="${{ inputs.sets }}"; i=0
+          for s in $SETS; do
             i=$((i+1)); echo "=== set $i: $s"
             echo "$s" | tr ',' ' ' | xargs timeout 120 python3 send_a_oom5.py > a.out 2>&1
             echo "A result: $(tail -2 a.out | tr '\n' ' ')"
