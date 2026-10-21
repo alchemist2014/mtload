@@ -19,22 +19,33 @@ jobs:
           python3 -m pip -q install requests
           python3 - <<'PY'
           import json, requests
-          S = requests.Session()
-          S.headers.update({"Accept":"application/json","User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141"})
-          cats = [c["id"] for c in requests.get("https://substack.com/api/v1/categories", timeout=30).json()]
+          H = {"Accept": "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9",
+               "Referer": "https://substack.com/", "Origin": "https://substack.com",
+               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}
           domains, seen = [], set()
-          for cid in cats[:14]:
-              for page in (1, 2):
-                  try:
-                      r = S.get(f"https://substack.com/api/v1/category/public/{cid}/{page}?sort=top", timeout=40)
-                      pubs = r.json().get("publications", [])
-                  except Exception:
-                      continue
-                  for p in pubs:
-                      d = p.get("custom_domain") or (str(p.get("subdomain")) + ".substack.com" if p.get("subdomain") else None)
-                      if d and d not in seen:
-                          seen.add(d); domains.append(d)
-                  if not pubs: break
+          try:
+              cats = [c["id"] for c in requests.get("https://substack.com/api/v1/categories", headers=H, timeout=40).json()]
+              print("categories", len(cats))
+              for cid in cats[:14]:
+                  for page in (1, 2):
+                      try:
+                          pubs = requests.get(f"https://substack.com/api/v1/category/public/{cid}/{page}?sort=top", headers=H, timeout=40).json().get("publications", [])
+                      except Exception as e:
+                          print("cat", cid, page, "fail", type(e).__name__); continue
+                      for p in pubs:
+                          d = p.get("custom_domain") or (str(p.get("subdomain")) + ".substack.com" if p.get("subdomain") else None)
+                          if d and d not in seen:
+                              seen.add(d); domains.append(d)
+                      if not pubs: break
+          except Exception as e:
+              print("categories failed:", type(e).__name__)
+          for d in """platformer.substack.com slowboring.substack.com astralcodexten.substack.com
+          noahpinion.substack.com persuasion.substack.com bariweiss.substack.com www.thefp.com
+          www.readtangle.com www.experimental-history.com www.worksinprogress.co
+          www.commonplace.news thehustle.substack.com aeon.substack.com""".split():
+              d = d.strip()
+              if d and d not in seen:
+                  seen.add(d); domains.append(d)
           open("/tmp/targets.txt","w").write("\n".join(domains))
           print("harvested", len(domains))
           PY
